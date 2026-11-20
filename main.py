@@ -11,6 +11,10 @@ the same input bytes always produce the same output bytes.
 The output directory can be overridden with the MAKEFUN_OUTPUT_DIR
 environment variable (the kit's own convention); it defaults to /output.
 """
+"""
+Kept tiny on purpose: the artwork is already finished,
+so this program has one job only — hand over an exact copy of it.
+"""
 
 import hashlib
 import os
@@ -26,11 +30,14 @@ def main() -> int:
     source = repo_root / SOURCE_NAME
     target = OUTPUT_DIR / SOURCE_NAME
 
+    # Make sure the destination folder exists before writing.
     target.parent.mkdir(parents=True, exist_ok=True)
 
+    # Load the finished image into memory before writing it out.
     image = source.read_bytes()
     target.write_bytes(image)
 
+    # Fingerprint the bytes so the log line proves what was written.
     digest = hashlib.sha256(image).hexdigest()
     print(f"wrote {target} ({len(image)} bytes, sha256 {digest})")
     return 0
