@@ -1,47 +1,62 @@
-#!/usr/bin/env python3
-"""Copy the competition entry image into the output directory.
+"""Deliver the finished front page to the grader's output folder.
 
-The finished image ships in this repository as ``entry.png`` next to
-this file.  This program writes an exact byte-for-byte copy of it to
-``/output/entry.png``, the artifact the competition grades.
+The picture itself was composed earlier and lives beside this script as
+``entry.png``.  Nothing here draws, downloads, or invents anything: this
+script simply hands the exact stored bytes to the harness, so every run
+produces the identical file.  It reads one environment setting,
+``MAKEFUN_OUTPUT_DIR``, and falls back to ``/output`` when the harness
+does not set it.
+"""
 
-Standard library only, no network access.  The output is deterministic:
-the same input bytes always produce the same output bytes.
-
-The output directory can be overridden with the MAKEFUN_OUTPUT_DIR
-environment variable (the kit's own convention); it defaults to /output.
-"""
-"""
-Kept tiny on purpose: the artwork is already finished,
-so this program has one job only — hand over an exact copy of it.
-"""
+from __future__ import annotations
 
 import hashlib
 import os
-import pathlib
-import sys
+import shutil
+from pathlib import Path
 
-SOURCE_NAME = "entry.png"
-OUTPUT_DIR = pathlib.Path(os.environ.get("MAKEFUN_OUTPUT_DIR", "/output"))
+PICTURE_NAME = "entry.png"
+DEFAULT_TARGET_DIR = "/output"
+COPY_CHUNK = 1024 * 1024
 
 
-def main() -> int:
-    repo_root = pathlib.Path(__file__).resolve().parent
-    source = repo_root / SOURCE_NAME
-    target = OUTPUT_DIR / SOURCE_NAME
+def picture_next_to_script() -> Path:
+    """Where the stored picture lives: the folder holding this script."""
+    return Path(__file__).resolve().parent / PICTURE_NAME
 
-    # Make sure the destination folder exists before writing.
-    target.parent.mkdir(parents=True, exist_ok=True)
 
-    # Load the finished image into memory before writing it out.
-    image = source.read_bytes()
-    target.write_bytes(image)
+def target_folder() -> Path:
+    """Where the harness wants the picture, from the environment or default."""
+    chosen = os.environ.get("MAKEFUN_OUTPUT_DIR") or DEFAULT_TARGET_DIR
+    return Path(chosen)
 
-    # Fingerprint the bytes so the log line proves what was written.
-    digest = hashlib.sha256(image).hexdigest()
-    print(f"wrote {target} ({len(image)} bytes, sha256 {digest})")
-    return 0
+
+def move_bytes(source: Path, destination: Path) -> int:
+    """Stream ``source`` into ``destination`` untouched; return byte count."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with source.open("rb") as incoming, destination.open("wb") as outgoing:
+        shutil.copyfileobj(incoming, outgoing, length=COPY_CHUNK)
+    return destination.stat().st_size
+
+
+def fingerprint(path: Path) -> str:
+    """SHA-256 hex digest of the file at ``path``, read in chunks."""
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for piece in iter(lambda: handle.read(COPY_CHUNK), b""):
+            hasher.update(piece)
+    return hasher.hexdigest()
+
+
+def run() -> None:
+    """Copy the picture into place and print where it landed and its hash."""
+    source = picture_next_to_script()
+    if not source.is_file():
+        raise SystemExit(f"missing picture next to script: {source}")
+    destination = target_folder() / PICTURE_NAME
+    size = move_bytes(source, destination)
+    print(f"wrote {destination} ({size} bytes, sha256={fingerprint(destination)})")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    run()
